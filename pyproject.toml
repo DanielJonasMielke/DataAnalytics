@@ -1,0 +1,19 @@
+[project]
+name = "weather-ai-vs-physics"
+version = "0.1.0"
+description = "Data Analytics project (HAW Hamburg, WiSe 2026/27): ECMWF's neural ensemble forecast (AIFS ENS) vs. its physics ensemble forecast (IFS ENS), verified against DWD station measurements."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "dynamical-catalog>=1.0.1",
+    "matplotlib>=3.10",
+    "numpy>=2.2",
+    "pandas>=2.2",
+    "xarray>=2025.1.2",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29",
+    "jupyterlab>=4.3",
+]
