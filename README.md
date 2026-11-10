@@ -56,6 +56,7 @@ Requires [uv](https://docs.astral.sh/uv/).
 ```bash
 uv sync               # creates .venv and installs the exact versions from uv.lock
 uv run jupyter lab    # then open notebooks/01_first_look.ipynb
+uv run ./process_data/01_download_dwd_data.py # example
 ```
 
 In VS Code, you can instead open the notebook directly and select the `.venv` Python environment as the kernel.
