@@ -6,6 +6,10 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "dynamical-catalog>=1.0.1",
+    "fsspec>=2025.1",
+    "aiohttp>=3.9",
+    "h5netcdf>=1.4",
+    "h5py>=3.12",
     "matplotlib>=3.10",
     "numpy>=2.2",
     "pandas>=2.2",

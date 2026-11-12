@@ -56,10 +56,23 @@ Requires [uv](https://docs.astral.sh/uv/).
 ```bash
 uv sync               # creates .venv and installs the exact versions from uv.lock
 uv run jupyter lab    # then open notebooks/01_first_look.ipynb
-uv run ./process_data/01_download_dwd_data.py # example
 ```
 
 In VS Code, you can instead open the notebook directly and select the `.venv` Python environment as the kernel.
+
+## Downloading the data
+
+One script per data source in `process_data/`. Each saves temperature and precipitation at the station
+(Hamburg-Fuhlsbüttel) from 2024-04-01 until today as a CSV in `data/`. Add `--limit 3` to try a script on 3 forecasts first;
+a script that was interrupted continues where it stopped. Settings (station, time window) are in `process_data/common.py`.
+
+```bash
+uv run ./process_data/01_download_dwd_data.py        # DWD measurements   -> data/dwd/
+uv run ./process_data/02_download_aifs_data.py       # AIFS Single        -> data/aifs_single/
+uv run ./process_data/03_download_graphcast_data.py  # GraphCast (IFS)    -> data/graphcast/
+uv run ./process_data/04_download_ifs_data.py        # IFS control run    -> data/ifs/
+uv run ./process_data/05_download_gfs_data.py        # GFS                -> data/gfs/
+```
 
 ## Data attribution
 
