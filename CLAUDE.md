@@ -58,7 +58,7 @@ How the downloads work:
   times in the window, select the nearest grid point and download in batches of 20 start times, appending to the CSV.
   Start times already in the CSV are skipped, so interrupted runs resume.
 - **GraphCast** reads one NetCDF file per day directly from S3 (`GRAP_v200_IFS` first, then `GRAP_v100_IFS`), only the
-  station grid point. Days without a file are listed in `data/graphcast/graphcast_missing_inits.txt`.
+  station grid point. Days without a file are listed in `data/graphcast/graphcast_missing_inits.txt`. A network error skips that day (not saved, retried on the next run); a full run takes many hours, so use `--workers 12` or more.
 - **DWD**: `historical` and `recent` zips are merged, `historical` wins on overlap, `-999` becomes NaN.
 
 ## Output files and their quirks

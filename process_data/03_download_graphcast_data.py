@@ -44,8 +44,8 @@ def find_file(init):
     return None
 
 
-def fetch_one(init):
-    """Read one forecast at the station. Runs in a worker process. Returns (init, folder, table)."""
+def read_forecast(init):
+    """Read one forecast at the station. Returns (init, folder, table)."""
     found = find_file(init)
     if found is None:
         return init, None, None
@@ -56,6 +56,14 @@ def fetch_one(init):
             point = ds[["t2", "apcp"]].sel(latitude=STATION_LAT, longitude=STATION_LON, method="nearest")  # closest grid point
             df = point.load().to_dataframe().reset_index()  # table: one row per lead time
     return init, prefix, df
+
+
+def fetch_one(init):
+    """Runs in a worker process. A network error skips the day instead of stopping the run."""
+    try:
+        return read_forecast(init)
+    except Exception:  # e.g. timeout; day is retried next run
+        return init, "error", None
 
 
 def main():
@@ -73,6 +81,9 @@ def main():
     started = time.time()
     with ProcessPoolExecutor(max_workers=args.workers) as pool:  # runs fetch_one for several days at once
         for n, (init, prefix, df) in enumerate(pool.map(fetch_one, todo), start=1):
+            if prefix == "error":
+                print(f"  {init:%Y-%m-%d}: network error, run the script again later")
+                continue
             if df is None:
                 missing.append(init)
                 print(f"  {init:%Y-%m-%d}: no file in the archive")
