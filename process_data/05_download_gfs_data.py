@@ -12,8 +12,9 @@ Run:      uv run ./process_data/05_download_gfs_data.py            (everything)
 
 from common import DATA_DIR, download_dynamical_point, parse_limit
 
-args = parse_limit(__doc__)
+args = parse_limit(__doc__)  # read the optional --limit setting
 
+# Download GFS at our station and save it as CSV
 download_dynamical_point(
     dataset_name="noaa-gfs-forecast",
     out_csv=DATA_DIR / "gfs" / "gfs_hamburg_t2m_precip.csv",

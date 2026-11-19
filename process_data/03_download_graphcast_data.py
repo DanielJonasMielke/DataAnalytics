@@ -26,43 +26,43 @@ import xarray as xr
 from common import DATA_DIR, END, START, STATION_LAT, STATION_LON, append_csv, done_init_times, print_csv_summary
 
 BUCKET_URL = "https://noaa-oar-mlwp-data.s3.amazonaws.com"
-PREFIXES = ["GRAP_v200_IFS", "GRAP_v100_IFS"]  # GraphCast folders; first with the file wins
+PREFIXES = ["GRAP_v200_IFS", "GRAP_v100_IFS"]  # two GraphCast versions, try the newer one first
 OUT_DIR = DATA_DIR / "graphcast"
 OUT_CSV = OUT_DIR / "graphcast_ifs_hamburg_t2m_precip.csv"
 MISSING_TXT = OUT_DIR / "graphcast_missing_inits.txt"
 
 
 def find_file(init):
-    """Return (folder, url) of the file for this forecast start time, or None if the archive has none."""
+    """Find the file for this forecast day, or None if missing."""
     for prefix in PREFIXES:
         url = f"{BUCKET_URL}/{prefix}/{init:%Y}/{init:%m%d}/{prefix}_{init:%Y%m%d%H}_f000_f240_06.nc"
         try:
-            urllib.request.urlopen(urllib.request.Request(url, method="HEAD"))  # only asks if the file exists
+            urllib.request.urlopen(urllib.request.Request(url, method="HEAD"))  # only ask if the file exists, download nothing
             return prefix, url
-        except urllib.error.HTTPError:  # file not in this folder
+        except urllib.error.HTTPError:  # file is not in this folder, try the next one
             pass
     return None
 
 
 def read_forecast(init):
-    """Read one forecast at the station. Returns (init, folder, table)."""
+    """Read one forecast day, but only the values at our station."""
     found = find_file(init)
     if found is None:
         return init, None, None
     prefix, url = found
 
-    with fsspec.open(url, "rb", block_size=4 * 2**20, cache_type="blockcache") as f:  # read remotely in 4 MB blocks
+    with fsspec.open(url, "rb", block_size=4 * 2**20, cache_type="blockcache") as f:  # open the online file, read it in 4 MB pieces
         with xr.open_dataset(f, engine="h5netcdf") as ds:
-            point = ds[["t2", "apcp"]].sel(latitude=STATION_LAT, longitude=STATION_LON, method="nearest")  # closest grid point
-            df = point.load().to_dataframe().reset_index()  # table: one row per lead time
+            point = ds[["t2", "apcp"]].sel(latitude=STATION_LAT, longitude=STATION_LON, method="nearest")  # temperature and rain at the closest grid point
+            df = point.load().to_dataframe().reset_index()  # download it and make a table, one row per forecast hour
     return init, prefix, df
 
 
 def fetch_one(init):
-    """Runs in a worker process. A network error skips the day instead of stopping the run."""
+    """Download one day; on a network error, skip it instead of crashing."""
     try:
         return read_forecast(init)
-    except Exception:  # e.g. timeout; day is retried next run
+    except Exception:  # e.g. connection timeout; this day is tried again next run
         return init, "error", None
 
 
@@ -72,32 +72,35 @@ def main():
     parser.add_argument("--workers", type=int, default=4, help="forecasts downloaded at the same time (default 4)")
     args = parser.parse_args()
 
-    all_inits = pd.date_range(START, END, freq="D")  # one 00 UTC forecast per day
+    all_inits = pd.date_range(START, END, freq="D")  # every day in our range, forecast starts at midnight
     done = done_init_times(OUT_CSV)
-    todo = [t for t in all_inits if t not in done][: args.limit]  # limit=None keeps all
+    todo = [t for t in all_inits if t not in done][: args.limit]  # skip saved days; without --limit take all
     print(f"{len(all_inits)} days in the window, {len(done)} already downloaded, {len(todo)} to do.")
 
-    missing = []
+    missing = []  # days that have no file in the archive
     started = time.time()
-    with ProcessPoolExecutor(max_workers=args.workers) as pool:  # runs fetch_one for several days at once
+    with ProcessPoolExecutor(max_workers=args.workers) as pool:  # download several days at the same time
         for n, (init, prefix, df) in enumerate(pool.map(fetch_one, todo), start=1):
+            # Network problem: skip this day for now
             if prefix == "error":
                 print(f"  {init:%Y-%m-%d}: network error, run the script again later")
                 continue
+            # No file for this day in the archive
             if df is None:
                 missing.append(init)
                 print(f"  {init:%Y-%m-%d}: no file in the archive")
                 continue
-            df.insert(0, "init_time", init)
-            df.insert(1, "s3_prefix", prefix)  # which GraphCast folder (version) the data came from
+            df.insert(0, "init_time", init)  # add the forecast start day as a column
+            df.insert(1, "s3_prefix", prefix)  # remember which GraphCast version the data came from
             append_csv(df, OUT_CSV)
             print(f"  {init:%Y-%m-%d} done ({n}/{len(todo)}), {time.time() - started:.0f} s elapsed")
 
+    # Save the list of days without a file
     if missing:
         MISSING_TXT.write_text("\n".join(f"{t:%Y-%m-%d}" for t in missing) + "\n")
         print(f"\n{len(missing)} start times have no file; listed in {MISSING_TXT}")
     print_csv_summary(OUT_CSV)
 
 
-if __name__ == "__main__":  # required: the worker processes import this file on Windows
+if __name__ == "__main__":  # needed on Windows so parallel downloads work
     main()

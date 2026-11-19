@@ -14,11 +14,12 @@ Run:      uv run ./process_data/04_download_ifs_data.py            (everything)
 
 from common import DATA_DIR, download_dynamical_point, parse_limit
 
-args = parse_limit(__doc__)
+args = parse_limit(__doc__)  # read the optional --limit setting
 
+# Download the IFS control run at our station and save it
 download_dynamical_point(
     dataset_name="ecmwf-ifs-ens-forecast-15-day-0-25-degree",
     out_csv=DATA_DIR / "ifs" / "ifs_control_hamburg_t2m_precip.csv",
-    member=0,  # control run
+    member=0,  # member 0 is the normal, undisturbed run
     limit=args.limit,
 )

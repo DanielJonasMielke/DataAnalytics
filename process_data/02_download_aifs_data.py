@@ -11,8 +11,9 @@ Run:      uv run ./process_data/02_download_aifs_data.py            (everything)
 
 from common import DATA_DIR, download_dynamical_point, parse_limit
 
-args = parse_limit(__doc__)
+args = parse_limit(__doc__)  # read the optional --limit setting
 
+# Download AIFS at our station and save it as CSV
 download_dynamical_point(
     dataset_name="ecmwf-aifs-single-forecast",
     out_csv=DATA_DIR / "aifs_single" / "aifs_single_hamburg_t2m_precip.csv",
