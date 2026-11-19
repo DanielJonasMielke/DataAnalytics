@@ -30,18 +30,33 @@ Course milestones: 20.11.2026 data preparation + exploratory analysis, 18.12.202
 - **Time-of-day trap:** with 00 UTC starts, +12 h is always midday. Compare same-time-of-day lead times (+24 h, +48 h, ...)
   or plot one curve per time of day.
 - **Model versions:** AIFS changed versions (test until 25.02.2025, v1, v1.1 on 27.08.2025, v2 on 12.05.2026 together with
-  IFS Cycle 50r1). Undecided: keep a version column and split the evaluation, or ignore it.
+  IFS Cycle 50r1). Undecided: keep a version column and split the evaluation, or ignore it. A quick check showed no
+  visible jump in the monthly +24 h MAE at the change dates.
+- **Precipitation timing (verified by correlation, AIFS/IFS/GFS/GraphCast vs DWD):** model values and DWD `R1` both refer to the interval *before* the
+  timestamp. A 6 h window ending at t = DWD hours t-5 ... t.
+- **Fair comparison:** only use the init days where all four models have a run (759 days; GraphCast has gaps).
 
 ## Current state
 
-Only the data download exists. The earlier notebook and `main.py` were removed. The scripts were tested with
-`--limit 3` against the real servers (results looked plausible, e.g. MAE about 1 °C at short lead times); the **full
-download has not been run yet**, so `data/` currently holds only 3 forecasts per model plus the full DWD series.
-Nothing is cleaned, unified or analysed yet.
+Full downloads are done (forecasts 01.04.2024 to 17./18.11.2026). The team copied all CSVs by hand into
+`data/full_datasets/`, which is what the notebooks read; there the DWD precipitation file is named
+`dwd_01975_rainfall_hourly.csv` (script 01 writes `..._precipitation_hourly.csv`).
+
+Exploratory analysis is done in `explore_data/` (notebooks are in German, executed with outputs):
+notebooks 01 to 05 look at each source alone (completeness, missing values, ranges, distributions, precipitation
+units, findings at the end); notebook 06 is deliberately short: it unifies all models, joins them with DWD, shows per model a scatter
+(day 2) and the temperature MAE by lead time, and compares all models on common days (MAE, share of wet windows).
+Keep it short; the team wants only the essentials there. Notebook 06 writes the tidy table `data/prepared/forecasts_vs_dwd.csv`.
+
+Main findings so far (common days): AIFS and GraphCast have the lowest temperature MAE at all lead times (about
+0.9 °C at +24 h, 2.8 to 3.0 °C at +240 h), IFS is 0.1 to 0.4 °C worse, GFS worst. All models are too cold, most at
+18 UTC. AI models predict light rain far too often (wet 6 h windows: AIFS 50 %, GraphCast 47 %, IFS 34 %, GFS 32 %,
+DWD 23 %). A quick check (not in the notebooks) showed no clear sign that AI smooths temperature extremes, and
+heavy rain is underestimated by all models.
 
 ## Codebase
 
-All code is in `process_data/`. Scripts run with `uv run ./process_data/<script>.py`. Scripts 02 to 05 also accept `--limit N` (first N forecasts); script 01 (DWD) has no `--limit` and always saves the full window.
+Download code is in `process_data/`, exploration notebooks in `explore_data/`. Scripts run with `uv run ./process_data/<script>.py`. Scripts 02 to 05 also accept `--limit N` (first N forecasts); script 01 (DWD) has no `--limit` and always saves the full window.
 
 | File                            | Purpose                                                                                                                                                         |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -51,6 +66,15 @@ All code is in `process_data/`. Scripts run with `uv run ./process_data/<script>
 | `03_download_graphcast_data.py` | GraphCast from public S3 bucket `noaa-oar-mlwp-data`, parallel (`--workers`, default 4)                                                                         |
 | `04_download_ifs_data.py`       | IFS ensemble member 0 (control run) via dynamical.org                                                                                                           |
 | `05_download_gfs_data.py`       | GFS via dynamical.org                                                                                                                                           |
+
+| Notebook (`explore_data/`)      | Purpose                                                                                       |
+| ------------------------------- | --------------------------------------------------------------------------------------------- |
+| `01_first_look_dwd.ipynb`       | DWD temperature, humidity, precipitation, quality levels                                      |
+| `02_first_look_aifs.ipynb`      | AIFS completeness, temperature, precipitation in mm per 6 h                                   |
+| `03_first_look_graphcast.ipynb` | GraphCast gaps per month, fill-value cleaning, Kelvin/metre conversion, negative precip       |
+| `04_first_look_ifs.ipynb`       | IFS completeness, step change at +144 h, precipitation per 6 h window                         |
+| `05_first_look_gfs.ipynb`       | GFS completeness, step change at +120 h, 43 °C outlier at +255 h, precipitation per 6 h window |
+| `06_compare_dwd_vs_models.ipynb`| Unify and join, DWD vs each model (scatter + MAE), all models on common days, short findings  |
 
 How the downloads work:
 
@@ -70,26 +94,20 @@ All in `data/` (git-ignored, re-created by the scripts).
 | `aifs_single/aifs_single_hamburg_t2m_precip.csv` | `init_time, lead_time_h, valid_time, temperature_2m, precipitation_surface` | °C; precipitation is a **rate in kg m-2 s-1**; precipitation NaN at lead 0                                                                                               |
 | `ifs/ifs_control_hamburg_t2m_precip.csv`         | same + `ensemble_member` (always 0)                                         | same units; steps are 3-hourly up to +144 h, then 6-hourly                                                                                                               |
 | `gfs/gfs_hamburg_t2m_precip.csv`                 | same as AIFS                                                                | hourly up to +120 h, then 3-hourly; precipitation NaN at lead 0                                                                                                          |
-| `graphcast/graphcast_ifs_hamburg_t2m_precip.csv` | `init_time, s3_prefix, time, t2, apcp`                                      | **Kelvin**; `apcp` is 6 h accumulation in **metres** (inferred, totals matched DWD); no lead-time column (`time` is the valid time); one tiny negative `apcp` value seen |
+| `graphcast/graphcast_ifs_hamburg_t2m_precip.csv` | `init_time, s3_prefix, time, t2, apcp`                                      | **Kelvin**; `apcp` is 6 h accumulation in **metres**; no lead-time column (`time` is the valid time); about 3500 tiny negative `apcp` values (clip to 0); NetCDF fill value 9.97e36 since 18.06.2026 at lead 0 and +6 h (set to NaN); only `GRAP_v100_IFS`; 201 of 962 days missing, mostly late Aug 2024 to Jan 2025 and May/Jun 2026 |
 | `dwd/dwd_01975_air_temperature_hourly.csv`       | `time, TT_TU, RF_TU, QN_9, source`                                          | °C, relative humidity %; `time` in UTC                                                                                                                                   |
-| `dwd/dwd_01975_precipitation_hourly.csv`         | `time, R1, RS_IND, WRTR, QN_8, source`                                      | `R1` is mm per hour; `time` in UTC                                                                                                                                       |
+| `dwd/dwd_01975_precipitation_hourly.csv`         | `time, R1, RS_IND, WRTR, QN_8, source`                                      | `R1` is mm per hour; `time` in UTC; values from 05.09.2026 on only formally checked (`QN` = 1)                                                                          |
+| `prepared/forecasts_vs_dwd.csv` (from notebook 06) | `model, init_time, lead_time_h, valid_time, t2m, precip, obs_t2m, obs_precip` | °C and mm per 6 h; lead times +6 h to +240 h; one row per model, run and lead time                                                                                      |
 
 Also present in `data/dwd/`: the raw DWD zip files (re-downloaded automatically when missing).
 
-Still to verify during preparation: whether the dynamical.org precipitation rate and the DWD `R1` timestamp refer to the
-interval before or after the timestamp.
-
 ## Next steps
 
-1. Run the full downloads (all five scripts, GraphCast with `--workers`) and check the row counts.
-2. **Data preparation** (needed for the 20.11. session), as new scripts in `process_data/` or similar:
-   - Unify units: temperature in °C; precipitation as mm per 6 h (rate times seconds, metres times 1000).
-   - Unify columns to one tidy table: `model, init_time, lead_time_h, valid_time, t2m, precip`.
-   - Keep only the common 6 h lead times (+6 h to +240 h); drop lead 0 for precipitation.
-   - Aggregate DWD to the same 6 h windows and join it on `valid_time` (temperature value at the time, precipitation sum).
-   - Handle missing days (GraphCast), NaN, and the tiny negative precipitation values; add a model-version column if needed.
-3. Exploratory analysis: bias and RMSE per model and lead time, same-time-of-day comparison.
-4. Modelling and evaluation (18.12.): regression, clustering, outlier detection, association rules, as in the project idea.
+1. Optional: move the preparation from notebook 06 into a script in `process_data/` so the tidy table is rebuilt
+   without running the notebook; decide whether to keep the AIFS version column.
+2. Modelling and evaluation (18.12.): regression, clustering, outlier detection, association rules, as in the project
+   idea. Starting hypotheses: AI better on temperature; AI smears precipitation into frequent light rain;
+   cold bias depends on time of day (strongest at 18 UTC); temperature extremes need a closer look.
 
 ## Working conventions
 

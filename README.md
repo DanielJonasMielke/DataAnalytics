@@ -31,8 +31,9 @@ DWD station Hamburg-Fuhlsbüttel (01975), from 01.04.2024 until today, using the
 
 ## What the repository can do right now
 
-Download temperature and precipitation at the station from all 5 sources and save them as CSV files.
-Nothing is cleaned or unified yet.
+- Download temperature and precipitation at the station from all 5 sources and save them as CSV files.
+- Explore each source and compare DWD against every model in Jupyter notebooks (`explore_data/`, in German).
+  Notebook 06 also builds one unified table (`data/prepared/forecasts_vs_dwd.csv`) for the modelling step.
 
 ```
 ├── process_data/
@@ -42,6 +43,9 @@ Nothing is cleaned or unified yet.
 │   ├── 03_download_graphcast_data.py  GraphCast          -> data/graphcast/
 │   ├── 04_download_ifs_data.py        IFS control run    -> data/ifs/
 │   └── 05_download_gfs_data.py        GFS                -> data/gfs/
+├── explore_data/
+│   ├── 01_first_look_dwd.ipynb ... 05_first_look_gfs.ipynb   first look at each source
+│   └── 06_compare_dwd_vs_models.ipynb                         DWD vs. each model, all models together
 ├── data/                              downloaded CSV files (not in git)
 ├── pyproject.toml                     Python dependencies
 └── uv.lock                            exact package versions
@@ -68,6 +72,15 @@ uv run ./process_data/05_download_gfs_data.py
 - Add `--limit 3` to a forecast script (02 to 05) to try it on 3 forecasts first. The DWD script (01) has no `--limit`: it always saves the full time window.
 - An interrupted script continues where it stopped; it skips forecasts that are already in its CSV.
 - Station and time window are set in `process_data/common.py`.
+
+## Running the notebooks
+
+The notebooks read the CSV files from `data/full_datasets/` (copy the downloaded files there).
+
+```bash
+uv sync --group dev
+uv run jupyter lab
+```
 
 ## Data attribution
 
